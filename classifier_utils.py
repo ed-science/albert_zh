@@ -41,14 +41,14 @@ def convert_to_unicode(text):
     elif isinstance(text, bytes):
       return text.decode("utf-8", "ignore")
     else:
-      raise ValueError("Unsupported string type: %s" % (type(text)))
+      raise ValueError(f"Unsupported string type: {type(text)}")
   elif six.PY2:
     if isinstance(text, str):
       return text.decode("utf-8", "ignore")
     elif isinstance(text, unicode):
       return text
     else:
-      raise ValueError("Unsupported string type: %s" % (type(text)))
+      raise ValueError(f"Unsupported string type: {type(text)}")
   else:
     raise ValueError("Not running on Python2 or Python 3?")
 
@@ -108,30 +108,21 @@ class DataProcessor(object):
     """Reads a tab separated value file."""
     with tf.gfile.Open(input_file, "r") as f:
       reader = csv.reader(f, delimiter=delimiter, quotechar=quotechar)
-      lines = []
-      for line in reader:
-        lines.append(line)
-      return lines
+      return list(reader)
 
   @classmethod
   def _read_txt(cls, input_file):
     """Reads a tab separated value file."""
     with tf.gfile.Open(input_file, "r") as f:
       reader = f.readlines()
-      lines = []
-      for line in reader:
-        lines.append(line.strip().split("_!_"))
-      return lines
+      return [line.strip().split("_!_") for line in reader]
 
   @classmethod
   def _read_json(cls, input_file):
     """Reads a tab separated value file."""
     with tf.gfile.Open(input_file, "r") as f:
       reader = f.readlines()
-      lines = []
-      for line in reader:
-        lines.append(json.loads(line.strip()))
-      return lines
+      return [json.loads(line.strip()) for line in reader]
 
 
 class XnliProcessor(DataProcessor):
@@ -156,7 +147,7 @@ class XnliProcessor(DataProcessor):
     """See base class."""
     examples = []
     for (i, line) in enumerate(lines):
-      guid = "%s-%s" % (set_type, i)
+      guid = f"{set_type}-{i}"
       text_a = convert_to_unicode(line['premise'])
       text_b = convert_to_unicode(line['hypo'])
       label = convert_to_unicode(line['label']) if set_type != 'test' else 'contradiction'
@@ -231,18 +222,13 @@ class TnewsProcessor(DataProcessor):
 
   def get_labels(self):
     """See base class."""
-    labels = []
-    for i in range(17):
-      if i == 5 or i == 11:
-        continue
-      labels.append(str(100 + i))
-    return labels
+    return [str(100 + i) for i in range(17) if i not in [5, 11]]
 
   def _create_examples(self, lines, set_type):
     """Creates examples for the training and dev sets."""
     examples = []
     for (i, line) in enumerate(lines):
-      guid = "%s-%s" % (set_type, i)
+      guid = f"{set_type}-{i}"
       text_a = convert_to_unicode(line['sentence'])
       text_b = None
       label = convert_to_unicode(line['label']) if set_type != 'test' else "100"
@@ -311,16 +297,13 @@ class iFLYTEKDataProcessor(DataProcessor):
 
   def get_labels(self):
     """See base class."""
-    labels = []
-    for i in range(119):
-      labels.append(str(i))
-    return labels
+    return [str(i) for i in range(119)]
 
   def _create_examples(self, lines, set_type):
     """Creates examples for the training and dev sets."""
     examples = []
     for (i, line) in enumerate(lines):
-      guid = "%s-%s" % (set_type, i)
+      guid = f"{set_type}-{i}"
       text_a = convert_to_unicode(line['sentence'])
       text_b = None
       label = convert_to_unicode(line['label']) if set_type != 'test' else "0"
@@ -355,7 +338,7 @@ class AFQMCProcessor(DataProcessor):
     """Creates examples for the training and dev sets."""
     examples = []
     for (i, line) in enumerate(lines):
-      guid = "%s-%s" % (set_type, i)
+      guid = f"{set_type}-{i}"
       text_a = convert_to_unicode(line['sentence1'])
       text_b = convert_to_unicode(line['sentence2'])
       label = convert_to_unicode(line['label']) if set_type != 'test' else '0'
@@ -391,7 +374,7 @@ class CMNLIProcessor(DataProcessor):
     for line in lines:
       line_obj = json.loads(line)
       index = index + 1
-      guid = "%s-%s" % (set_type, index)
+      guid = f"{set_type}-{index}"
       text_a = convert_to_unicode(line_obj["sentence1"])
       text_b = convert_to_unicode(line_obj["sentence2"])
       label = convert_to_unicode(line_obj["label"]) if set_type != 'test' else 'neutral'
@@ -428,7 +411,7 @@ class CslProcessor(DataProcessor):
     """Creates examples for the training and dev sets."""
     examples = []
     for (i, line) in enumerate(lines):
-      guid = "%s-%s" % (set_type, i)
+      guid = f"{set_type}-{i}"
       text_a = convert_to_unicode(" ".join(line['keyword']))
       text_b = convert_to_unicode(line['abst'])
       label = convert_to_unicode(line['label']) if set_type != 'test' else '0'
@@ -802,7 +785,7 @@ class WSCProcessor(DataProcessor):
     """Creates examples for the training and dev sets."""
     examples = []
     for (i, line) in enumerate(lines):
-      guid = "%s-%s" % (set_type, i)
+      guid = f"{set_type}-{i}"
       text_a = convert_to_unicode(line['text'])
       text_a_list = list(text_a)
       target = line['target']
@@ -811,9 +794,9 @@ class WSCProcessor(DataProcessor):
       pronoun = target['span2_text']
       pronoun_idx = target['span2_index']
 
-      assert text_a[pronoun_idx: (pronoun_idx + len(pronoun))
-                    ] == pronoun, "pronoun: {}".format(pronoun)
-      assert text_a[query_idx: (query_idx + len(query))] == query, "query: {}".format(query)
+      assert (text_a[pronoun_idx:(
+          pronoun_idx + len(pronoun))] == pronoun), f"pronoun: {pronoun}"
+      assert text_a[query_idx: (query_idx + len(query))] == query, f"query: {query}"
 
       if pronoun_idx > query_idx:
         text_a_list.insert(query_idx, "_")
@@ -828,11 +811,7 @@ class WSCProcessor(DataProcessor):
 
       text_a = "".join(text_a_list)
 
-      if set_type == "test":
-        label = "true"
-      else:
-        label = line['label']
-
+      label = "true" if set_type == "test" else line['label']
       examples.append(
           InputExample(guid=guid, text_a=text_a, text_b=None, label=label))
     return examples
@@ -865,10 +844,10 @@ class COPAProcessor(DataProcessor):
     return ["0", "1"]
 
   @classmethod
-  def _create_examples_one(self, lines, set_type):
+  def _create_examples_one(cls, lines, set_type):
     examples = []
     for (i, line) in enumerate(lines):
-      guid1 = "%s-%s" % (set_type, i)
+      guid1 = f"{set_type}-{i}"
 #         try:
       if line['question'] == 'cause':
         text_a = convert_to_unicode(line['premise'] + '原因是什么呢？' + line['choice0'])
@@ -884,12 +863,12 @@ class COPAProcessor(DataProcessor):
     return examples
 
   @classmethod
-  def _create_examples(self, lines, set_type):
+  def _create_examples(cls, lines, set_type):
     examples = []
     for (i, line) in enumerate(lines):
       i = 2 * i
-      guid1 = "%s-%s" % (set_type, i)
-      guid2 = "%s-%s" % (set_type, i + 1)
+      guid1 = f"{set_type}-{i}"
+      guid2 = f"{set_type}-{i + 1}"
 #         try:
       premise = convert_to_unicode(line['premise'])
       choice0 = convert_to_unicode(line['choice0'])
@@ -911,10 +890,10 @@ class COPAProcessor(DataProcessor):
       else:
         print('wrong format!!')
         return None
-      examples.append(
-          InputExample(guid=guid1, text_a=text_a, text_b=text_b, label=label))
-      examples.append(
-          InputExample(guid=guid2, text_a=text_a2, text_b=text_b2, label=label2))
+      examples.extend((
+          InputExample(guid=guid1, text_a=text_a, text_b=text_b, label=label),
+          InputExample(guid=guid2, text_a=text_a2, text_b=text_b2, label=label2),
+      ))
 #         except Exception as e:
 #             print('###error.i:',e, i, line)
     return examples
