@@ -266,10 +266,10 @@ def model_fn_builder(albert_config, init_checkpoint, learning_rate,
             predictions=sentence_order_predictions)
         sentence_order_mean_loss = tf.metrics.mean(
             values=sentence_order_example_loss)
-        metrics.update({
+        metrics |= {
             "sentence_order_accuracy": sentence_order_accuracy,
-            "sentence_order_loss": sentence_order_mean_loss
-        })
+            "sentence_order_loss": sentence_order_mean_loss,
+        }
         return metrics
 
       metric_values = [
@@ -375,8 +375,7 @@ def gather_indexes(sequence_tensor, positions):
   flat_positions = tf.reshape(positions + flat_offsets, [-1])
   flat_sequence_tensor = tf.reshape(sequence_tensor,
                                     [batch_size * seq_length, width])
-  output_tensor = tf.gather(flat_sequence_tensor, flat_positions)
-  return output_tensor
+  return tf.gather(flat_sequence_tensor, flat_positions)
 
 
 def input_fn_builder(input_files,
@@ -401,17 +400,17 @@ def input_fn_builder(input_files,
     }
 
     if FLAGS.masked_lm_budget:
-      name_to_features.update({
-          "token_boundary":
-              tf.FixedLenFeature([max_seq_length], tf.int64)})
+      name_to_features["token_boundary"] = tf.FixedLenFeature([max_seq_length],
+                                                              tf.int64)
     else:
-      name_to_features.update({
+      name_to_features |= {
           "masked_lm_positions":
-              tf.FixedLenFeature([max_predictions_per_seq], tf.int64),
+          tf.FixedLenFeature([max_predictions_per_seq], tf.int64),
           "masked_lm_ids":
-              tf.FixedLenFeature([max_predictions_per_seq], tf.int64),
+          tf.FixedLenFeature([max_predictions_per_seq], tf.int64),
           "masked_lm_weights":
-              tf.FixedLenFeature([max_predictions_per_seq], tf.float32)})
+          tf.FixedLenFeature([max_predictions_per_seq], tf.float32),
+      }
 
     # For training, we want a lot of parallel reading and shuffling.
     # For eval, we want no shuffling and parallel reading doesn't matter.
@@ -484,7 +483,7 @@ def main(_):
 
   tf.logging.info("*** Input Files ***")
   for input_file in input_files:
-    tf.logging.info("  %s" % input_file)
+    tf.logging.info(f"  {input_file}")
 
   tpu_cluster_resolver = None
   if FLAGS.use_tpu and FLAGS.tpu_name:

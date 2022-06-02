@@ -154,33 +154,11 @@ def convert_single_example_for_inews(ex_index, tokens_a, tokens_b, label_map, ma
     # length is less than the specified length.
     # Account for [CLS], [SEP], [SEP] with "- 3"
     _truncate_seq_pair(tokens_a, tokens_b, max_seq_length - 3)
-  else:
-    # Account for [CLS] and [SEP] with "- 2"
-    if len(tokens_a) > max_seq_length - 2:
-      tokens_a = tokens_a[0:(max_seq_length - 2)]
+  elif len(tokens_a) > max_seq_length - 2:
+    tokens_a = tokens_a[:max_seq_length - 2]
 
-  # The convention in BERT is:
-  # (a) For sequence pairs:
-  #  tokens:   [CLS] is this jack ##son ##ville ? [SEP] no it is not . [SEP]
-  #  type_ids: 0     0  0    0    0     0       0 0     1  1  1  1   1 1
-  # (b) For single sequences:
-  #  tokens:   [CLS] the dog is hairy . [SEP]
-  #  type_ids: 0     0   0   0  0     0 0
-  #
-  # Where "type_ids" are used to indicate whether this is the first
-  # sequence or the second sequence. The embedding vectors for `type=0` and
-  # `type=1` were learned during pre-training and are added to the wordpiece
-  # embedding vector (and position vector). This is not *strictly* necessary
-  # since the [SEP] token unambiguously separates the sequences, but it makes
-  # it easier for the model to learn the concept of sequences.
-  #
-  # For classification tasks, the first vector (corresponding to [CLS]) is
-  # used as the "sentence vector". Note that this only makes sense because
-  # the entire model is fine-tuned.
-  tokens = []
-  segment_ids = []
-  tokens.append("[CLS]")
-  segment_ids.append(0)
+  tokens = ["[CLS]"]
+  segment_ids = [0]
   for token in tokens_a:
     tokens.append(token)
     segment_ids.append(0)
@@ -213,22 +191,21 @@ def convert_single_example_for_inews(ex_index, tokens_a, tokens_b, label_map, ma
   label_id = label_map[example.label]
   if ex_index < 5:
     tf.logging.info("*** Example ***")
-    tf.logging.info("guid: %s" % (example.guid))
+    tf.logging.info(f"guid: {example.guid}")
     tf.logging.info("tokens: %s" % " ".join(
         [tokenization.printable_text(x) for x in tokens]))
-    tf.logging.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
-    tf.logging.info("input_mask: %s" % " ".join([str(x) for x in input_mask]))
-    tf.logging.info("segment_ids: %s" % " ".join([str(x) for x in segment_ids]))
+    tf.logging.info(f'input_ids: {" ".join([str(x) for x in input_ids])}')
+    tf.logging.info(f'input_mask: {" ".join([str(x) for x in input_mask])}')
+    tf.logging.info(f'segment_ids: {" ".join([str(x) for x in segment_ids])}')
     tf.logging.info("label: %s (id = %d)" % (example.label, label_id))
 
-  feature = InputFeatures(
+  return InputFeatures(
       input_ids=input_ids,
       input_mask=input_mask,
       segment_ids=segment_ids,
       label_id=label_id,
-      is_real_example=True)
-
-  return feature
+      is_real_example=True,
+  )
 
 
 def convert_example_list_for_inews(ex_index, example, label_list, max_seq_length,
@@ -243,10 +220,7 @@ def convert_example_list_for_inews(ex_index, example, label_list, max_seq_length
         label_id=0,
         is_real_example=False)]
 
-  label_map = {}
-  for (i, label) in enumerate(label_list):
-    label_map[label] = i
-
+  label_map = {label: i for (i, label) in enumerate(label_list)}
   tokens_a = tokenizer.tokenize(example.text_a)
   tokens_b = None
   if example.text_b:
@@ -284,8 +258,7 @@ def file_based_convert_examples_to_features_for_inews(
     num_example += len(feature_list)
 
     def create_int_feature(values):
-      f = tf.train.Feature(int64_list=tf.train.Int64List(value=list(values)))
-      return f
+      return tf.train.Feature(int64_list=tf.train.Int64List(value=list(values)))
 
     features = collections.OrderedDict()
     for feature in feature_list:
@@ -314,47 +287,19 @@ def convert_single_example(ex_index, example, label_list, max_seq_length,
         label_id=0,
         is_real_example=False)
 
-  label_map = {}
-  for (i, label) in enumerate(label_list):
-    label_map[label] = i
-
+  label_map = {label: i for (i, label) in enumerate(label_list)}
   tokens_a = tokenizer.tokenize(example.text_a)
-  tokens_b = None
-  if example.text_b:
-    tokens_b = tokenizer.tokenize(example.text_b)
-
+  tokens_b = tokenizer.tokenize(example.text_b) if example.text_b else None
   if tokens_b:
     # Modifies `tokens_a` and `tokens_b` in place so that the total
     # length is less than the specified length.
     # Account for [CLS], [SEP], [SEP] with "- 3"
     _truncate_seq_pair(tokens_a, tokens_b, max_seq_length - 3)
-  else:
-    # Account for [CLS] and [SEP] with "- 2"
-    if len(tokens_a) > max_seq_length - 2:
-      tokens_a = tokens_a[0:(max_seq_length - 2)]
+  elif len(tokens_a) > max_seq_length - 2:
+    tokens_a = tokens_a[:max_seq_length - 2]
 
-  # The convention in BERT is:
-  # (a) For sequence pairs:
-  #  tokens:   [CLS] is this jack ##son ##ville ? [SEP] no it is not . [SEP]
-  #  type_ids: 0     0  0    0    0     0       0 0     1  1  1  1   1 1
-  # (b) For single sequences:
-  #  tokens:   [CLS] the dog is hairy . [SEP]
-  #  type_ids: 0     0   0   0  0     0 0
-  #
-  # Where "type_ids" are used to indicate whether this is the first
-  # sequence or the second sequence. The embedding vectors for `type=0` and
-  # `type=1` were learned during pre-training and are added to the wordpiece
-  # embedding vector (and position vector). This is not *strictly* necessary
-  # since the [SEP] token unambiguously separates the sequences, but it makes
-  # it easier for the model to learn the concept of sequences.
-  #
-  # For classification tasks, the first vector (corresponding to [CLS]) is
-  # used as the "sentence vector". Note that this only makes sense because
-  # the entire model is fine-tuned.
-  tokens = []
-  segment_ids = []
-  tokens.append("[CLS]")
-  segment_ids.append(0)
+  tokens = ["[CLS]"]
+  segment_ids = [0]
   for token in tokens_a:
     tokens.append(token)
     segment_ids.append(0)
@@ -387,21 +332,21 @@ def convert_single_example(ex_index, example, label_list, max_seq_length,
   label_id = label_map[example.label]
   if ex_index < 5:
     tf.logging.info("*** Example ***")
-    tf.logging.info("guid: %s" % (example.guid))
+    tf.logging.info(f"guid: {example.guid}")
     tf.logging.info("tokens: %s" % " ".join(
         [tokenization.printable_text(x) for x in tokens]))
-    tf.logging.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
-    tf.logging.info("input_mask: %s" % " ".join([str(x) for x in input_mask]))
-    tf.logging.info("segment_ids: %s" % " ".join([str(x) for x in segment_ids]))
+    tf.logging.info(f'input_ids: {" ".join([str(x) for x in input_ids])}')
+    tf.logging.info(f'input_mask: {" ".join([str(x) for x in input_mask])}')
+    tf.logging.info(f'segment_ids: {" ".join([str(x) for x in segment_ids])}')
     tf.logging.info("label: %s (id = %d)" % (example.label, label_id))
 
-  feature = InputFeatures(
+  return InputFeatures(
       input_ids=input_ids,
       input_mask=input_mask,
       segment_ids=segment_ids,
       label_id=label_id,
-      is_real_example=True)
-  return feature
+      is_real_example=True,
+  )
 
 
 def file_based_convert_examples_to_features(
@@ -418,8 +363,7 @@ def file_based_convert_examples_to_features(
                                      max_seq_length, tokenizer)
 
     def create_int_feature(values):
-      f = tf.train.Feature(int64_list=tf.train.Int64List(value=list(values)))
-      return f
+      return tf.train.Feature(int64_list=tf.train.Int64List(value=list(values)))
 
     features = collections.OrderedDict()
     features["input_ids"] = create_int_feature(feature.input_ids)

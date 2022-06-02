@@ -33,11 +33,9 @@ def get_shape_list(tensor, expected_rank=None, name=None):
 
 	shape = tensor.shape.as_list()
 
-	non_static_indexes = []
-	for (index, dim) in enumerate(shape):
-		if dim is None:
-			non_static_indexes.append(index)
-
+	non_static_indexes = [
+	    index for (index, dim) in enumerate(shape) if dim is None
+	]
 	if not non_static_indexes:
 		return shape
 
@@ -50,14 +48,13 @@ def reshape_to_matrix(input_tensor):
 	"""Reshapes a >= rank 2 tensor to a rank 2 tensor (i.e., a matrix)."""
 	ndims = input_tensor.shape.ndims
 	if ndims < 2:
-		raise ValueError("Input tensor must have at least rank 2. Shape = %s" %
-										 (input_tensor.shape))
+		raise ValueError(
+		    f"Input tensor must have at least rank 2. Shape = {input_tensor.shape}")
 	if ndims == 2:
 		return input_tensor
 
 	width = input_tensor.shape[-1]
-	output_tensor = tf.reshape(input_tensor, [-1, width])
-	return output_tensor
+	return tf.reshape(input_tensor, [-1, width])
 
 def reshape_from_matrix(output_tensor, orig_shape_list):
 	"""Reshapes a rank 2 tensor back to its original rank >= 2 tensor."""
@@ -66,7 +63,7 @@ def reshape_from_matrix(output_tensor, orig_shape_list):
 
 	output_shape = get_shape_list(output_tensor)
 
-	orig_dims = orig_shape_list[0:-1]
+	orig_dims = orig_shape_list[:-1]
 	width = output_shape[-1]
 
 	return tf.reshape(output_tensor, orig_dims + [width])
@@ -112,8 +109,7 @@ def gather_indexes(sequence_tensor, positions):
 	flat_positions = tf.reshape(positions + flat_offsets, [-1])
 	flat_sequence_tensor = tf.reshape(sequence_tensor,
 																		[batch_size * seq_length, width])
-	output_tensor = tf.gather(flat_sequence_tensor, flat_positions)
-	return output_tensor
+	return tf.gather(flat_sequence_tensor, flat_positions)
 
 # add sequence mask for:
 # 1. random shuffle lm modeling---xlnet with random shuffled input

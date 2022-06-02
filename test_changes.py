@@ -11,7 +11,7 @@ batch_size = 2048
 sequence_length = 512
 vocab_size = 30000
 hidden_size = 1024
-num_attention_heads = int(hidden_size / 64)
+num_attention_heads = hidden_size // 64
 
 def get_total_parameters():
     """

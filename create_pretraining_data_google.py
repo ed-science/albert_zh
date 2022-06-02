@@ -128,10 +128,9 @@ class TrainingInstance(object):
 def write_instance_to_example_files(instances, tokenizer, max_seq_length,
                                     max_predictions_per_seq, output_files):
   """Create TF example files from `TrainingInstance`s."""
-  writers = []
-  for output_file in output_files:
-    writers.append(tf.python_io.TFRecordWriter(output_file))
-
+  writers = [
+      tf.python_io.TFRecordWriter(output_file) for output_file in output_files
+  ]
   writer_index = 0
 
   total_written = 0
@@ -197,8 +196,7 @@ def write_instance_to_example_files(instances, tokenizer, max_seq_length,
           values = feature.int64_list.value
         elif feature.float_list.value:
           values = feature.float_list.value
-        tf.logging.info(
-            "%s: %s" % (feature_name, " ".join([str(x) for x in values])))
+        tf.logging.info(f'{feature_name}: {" ".join([str(x) for x in values])}')
 
   for writer in writers:
     writer.close()
@@ -207,13 +205,11 @@ def write_instance_to_example_files(instances, tokenizer, max_seq_length,
 
 
 def create_int_feature(values):
-  feature = tf.train.Feature(int64_list=tf.train.Int64List(value=list(values)))
-  return feature
+  return tf.train.Feature(int64_list=tf.train.Int64List(value=list(values)))
 
 
 def create_float_feature(values):
-  feature = tf.train.Feature(float_list=tf.train.FloatList(value=list(values)))
-  return feature
+  return tf.train.Feature(float_list=tf.train.FloatList(value=list(values)))
 
 
 def create_training_instances(input_files, tokenizer, max_seq_length,
@@ -244,8 +240,7 @@ def create_training_instances(input_files, tokenizer, max_seq_length,
         # Empty lines are used as document delimiters
         if not line:
           all_documents.append([])
-        tokens = tokenizer.tokenize(line)
-        if tokens:
+        if tokens := tokenizer.tokenize(line):
           all_documents[-1].append(tokens)
 
   # Remove empty documents
@@ -350,13 +345,11 @@ def create_instances_from_document(
             tokens_b.extend(current_chunk[j])
         truncate_seq_pair(tokens_a, tokens_b, max_num_tokens, rng)
 
-        assert len(tokens_a) >= 1
-        assert len(tokens_b) >= 1
+        assert tokens_a
+        assert tokens_b
 
-        tokens = []
-        segment_ids = []
-        tokens.append("[CLS]")
-        segment_ids.append(0)
+        tokens = ["[CLS]"]
+        segment_ids = [0]
         for token in tokens_a:
           tokens.append(token)
           segment_ids.append(0)
@@ -400,13 +393,11 @@ def _is_start_piece_sp(piece):
   # Note(mingdachen):
   # For foreign characters, we always treat them as a whole piece.
   english_chars = set(list("abcdefghijklmnopqrstuvwhyz"))
-  if (six.ensure_str(piece).startswith("▁") or
-      six.ensure_str(piece).startswith("<") or piece in special_pieces or
-      not all([i.lower() in english_chars.union(special_pieces)
-               for i in piece])):
-    return True
-  else:
-    return False
+  return bool(
+      six.ensure_str(piece).startswith("▁")
+      or six.ensure_str(piece).startswith("<") or piece in special_pieces
+      or any(i.lower() not in english_chars.union(special_pieces)
+             for i in piece))
 
 
 def _is_start_piece_bert(piece):
@@ -436,7 +427,7 @@ def create_masked_lm_predictions(tokens, masked_lm_prob,
   token_boundary = [0] * len(tokens)
 
   for (i, token) in enumerate(tokens):
-    if token == "[CLS]" or token == "[SEP]":
+    if token in ["[CLS]", "[SEP]"]:
       token_boundary[i] = 1
       continue
     # Whole Word Masking means that if we mask all of the wordpieces
@@ -445,8 +436,7 @@ def create_masked_lm_predictions(tokens, masked_lm_prob,
     # Note that Whole Word Masking does *not* change the training code
     # at all -- we still predict each WordPiece independently, softmaxed
     # over the entire vocabulary.
-    if (FLAGS.do_whole_word_mask and len(cand_indexes) >= 1 and
-        not is_start_piece(token)):
+    if FLAGS.do_whole_word_mask and cand_indexes and not is_start_piece(token):
       cand_indexes[-1].append(i)
     else:
       cand_indexes.append([i])
@@ -476,9 +466,7 @@ def create_masked_lm_predictions(tokens, masked_lm_prob,
 
   ngram_indexes = []
   for idx in range(len(cand_indexes)):
-    ngram_index = []
-    for n in ngrams:
-      ngram_index.append(cand_indexes[idx:idx+n])
+    ngram_index = [cand_indexes[idx:idx+n] for n in ngrams]
     ngram_indexes.append(ngram_index)
 
   rng.shuffle(ngram_indexes)
@@ -505,20 +493,14 @@ def create_masked_lm_predictions(tokens, masked_lm_prob,
     # Note(mingdachen):
     # Repeatedly looking for a candidate that does not exceed the
     # maximum number of predictions by trying shorter ngrams.
-    while len(masked_lms) + len(index_set) > num_to_predict:
-      if n == 0:
-        break
+    while len(masked_lms) + len(index_set) > num_to_predict and n != 0:
       index_set = sum(cand_index_set[n - 1], [])
       n -= 1
     # If adding a whole-word mask would exceed the maximum number of
     # predictions, then just skip this candidate.
     if len(masked_lms) + len(index_set) > num_to_predict:
       continue
-    is_any_index_covered = False
-    for index in index_set:
-      if index in covered_indexes:
-        is_any_index_covered = True
-        break
+    is_any_index_covered = any(index in covered_indexes for index in index_set)
     if is_any_index_covered:
       continue
     for index in index_set:
@@ -528,13 +510,10 @@ def create_masked_lm_predictions(tokens, masked_lm_prob,
       # 80% of the time, replace with [MASK]
       if rng.random() < 0.8:
         masked_token = "[MASK]"
+      elif rng.random() < 0.5:
+        masked_token = tokens[index]
       else:
-        # 10% of the time, keep original
-        if rng.random() < 0.5:
-          masked_token = tokens[index]
-        # 10% of the time, replace with random word
-        else:
-          masked_token = vocab_words[rng.randint(0, len(vocab_words) - 1)]
+        masked_token = vocab_words[rng.randint(0, len(vocab_words) - 1)]
 
       output_tokens[index] = masked_token
 
@@ -563,20 +542,16 @@ def create_masked_lm_predictions(tokens, masked_lm_prob,
       index_set = sum(cand_index_set[n - 1], [])
       n -= 1
 
-      while len(select_indexes) + len(index_set) > num_to_predict:
-        if n == 0:
-          break
+      while len(select_indexes) + len(index_set) > num_to_predict and n != 0:
         index_set = sum(cand_index_set[n - 1], [])
         n -= 1
       # If adding a whole-word mask would exceed the maximum number of
       # predictions, then just skip this candidate.
       if len(select_indexes) + len(index_set) > num_to_predict:
         continue
-      is_any_index_covered = False
-      for index in index_set:
-        if index in covered_indexes or index in select_indexes:
-          is_any_index_covered = True
-          break
+      is_any_index_covered = any(
+          index in covered_indexes or index in select_indexes
+          for index in index_set)
       if is_any_index_covered:
         continue
       for index in index_set:

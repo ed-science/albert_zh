@@ -99,10 +99,9 @@ class TrainingInstance(object):
 def write_instance_to_example_files(instances, tokenizer, max_seq_length,
                                     max_predictions_per_seq, output_files):
   """Create TF example files from `TrainingInstance`s."""
-  writers = []
-  for output_file in output_files:
-    writers.append(tf.python_io.TFRecordWriter(output_file))
-
+  writers = [
+      tf.python_io.TFRecordWriter(output_file) for output_file in output_files
+  ]
   writer_index = 0
 
   total_written = 0
@@ -160,8 +159,7 @@ def write_instance_to_example_files(instances, tokenizer, max_seq_length,
           values = feature.int64_list.value
         elif feature.float_list.value:
           values = feature.float_list.value
-        tf.logging.info(
-            "%s: %s" % (feature_name, " ".join([str(x) for x in values])))
+        tf.logging.info(f'{feature_name}: {" ".join([str(x) for x in values])}')
 
   for writer in writers:
     writer.close()
@@ -170,13 +168,11 @@ def write_instance_to_example_files(instances, tokenizer, max_seq_length,
 
 
 def create_int_feature(values):
-  feature = tf.train.Feature(int64_list=tf.train.Int64List(value=list(values)))
-  return feature
+  return tf.train.Feature(int64_list=tf.train.Int64List(value=list(values)))
 
 
 def create_float_feature(values):
-  feature = tf.train.Feature(float_list=tf.train.FloatList(value=list(values)))
-  return feature
+  return tf.train.Feature(float_list=tf.train.FloatList(value=list(values)))
 
 
 def create_training_instances(input_files, tokenizer, max_seq_length,
@@ -204,8 +200,7 @@ def create_training_instances(input_files, tokenizer, max_seq_length,
         # Empty lines are used as document delimiters
         if not line:
           all_documents.append([])
-        tokens = tokenizer.tokenize(line)
-        if tokens:
+        if tokens := tokenizer.tokenize(line):
           all_documents[-1].append(tokens)
 
   # Remove empty documents
@@ -225,37 +220,36 @@ def create_training_instances(input_files, tokenizer, max_seq_length,
   return instances
 
 def get_new_segment(segment):  # 新增的方法 ####
-    """
+  """
     输入一句话，返回一句经过处理的话: 为了支持中文全称mask，将被分开的词，将上特殊标记("#")，使得后续处理模块，能够知道哪些字是属于同一个词的。
     :param segment: 一句话. e.g.  ['悬', '灸', '技', '术', '培', '训', '专', '家', '教', '你', '艾', '灸', '降', '血', '糖', '，', '为', '爸', '妈', '收', '好', '了', '！']
     :return: 一句处理过的话 e.g.    ['悬', '##灸', '技', '术', '培', '训', '专', '##家', '教', '你', '艾', '##灸', '降', '##血', '##糖', '，', '为', '爸', '##妈', '收', '##好', '了', '！']
     """
-    seq_cws = jieba.lcut("".join(segment)) # 分词
-    seq_cws_dict = {x: 1 for x in seq_cws} # 分词后的词加入到词典dict
-    new_segment = []
-    i = 0
-    while i < len(segment): # 从句子的第一个字开始处理，知道处理完整个句子
-      if len(re.findall('[\u4E00-\u9FA5]', segment[i])) == 0:  # 如果找不到中文的，原文加进去即不用特殊处理。
-        new_segment.append(segment[i])
-        i += 1
-        continue
+  seq_cws = jieba.lcut("".join(segment)) # 分词
+  seq_cws_dict = {x: 1 for x in seq_cws} # 分词后的词加入到词典dict
+  new_segment = []
+  i = 0
+  while i < len(segment): # 从句子的第一个字开始处理，知道处理完整个句子
+    if len(re.findall('[\u4E00-\u9FA5]', segment[i])) == 0:  # 如果找不到中文的，原文加进去即不用特殊处理。
+      new_segment.append(segment[i])
+      i += 1
+      continue
 
-      has_add = False
-      for length in range(3, 0, -1):
-        if i + length > len(segment):
-          continue
-        if ''.join(segment[i:i + length]) in seq_cws_dict:
-          new_segment.append(segment[i])
-          for l in range(1, length):
-            new_segment.append('##' + segment[i + l])
-          i += length
-          has_add = True
-          break
-      if not has_add:
+    has_add = False
+    for length in range(3, 0, -1):
+      if i + length > len(segment):
+        continue
+      if ''.join(segment[i:i + length]) in seq_cws_dict:
         new_segment.append(segment[i])
-        i += 1
-    # print("get_new_segment.wwm.get_new_segment:",new_segment)
-    return new_segment
+        new_segment.extend(f'##{segment[i + l]}' for l in range(1, length))
+        i += length
+        has_add = True
+        break
+    if not has_add:
+      new_segment.append(segment[i])
+      i += 1
+  # print("get_new_segment.wwm.get_new_segment:",new_segment)
+  return new_segment
 
 def create_instances_from_document_albert(
     all_documents, document_index, max_seq_length, short_seq_prob,
@@ -319,25 +313,20 @@ def create_instances_from_document_albert(
         # print("tokens_a length1:",len(tokens_a))
         # print("tokens_b length1:",len(tokens_b)) # len(tokens_b) = 0
 
-        if len(tokens_a) == 0 or len(tokens_b) == 0: i += 1; continue
+        if not tokens_a or not tokens_b: i += 1; continue
         if rng.random() < 0.5: # 交换一下tokens_a和tokens_b
           is_random_next=True
-          temp=tokens_a
-          tokens_a=tokens_b
-          tokens_b=temp
+          tokens_a, tokens_b = tokens_b, tokens_a
         else:
           is_random_next=False
 
         truncate_seq_pair(tokens_a, tokens_b, max_num_tokens, rng)
 
-        assert len(tokens_a) >= 1
-        assert len(tokens_b) >= 1
+        assert tokens_a
+        assert tokens_b
 
-        # 把tokens_a & tokens_b加入到按照bert的风格，即以[CLS]tokens_a[SEP]tokens_b[SEP]的形式，结合到一起，作为最终的tokens; 也带上segment_ids，前面部分segment_ids的值是0，后面部分的值是1.
-        tokens = []
-        segment_ids = []
-        tokens.append("[CLS]")
-        segment_ids.append(0)
+        tokens = ["[CLS]"]
+        segment_ids = [0]
         for token in tokens_a:
           tokens.append(token)
           segment_ids.append(0)
@@ -452,14 +441,11 @@ def create_instances_from_document_original( # THIS IS ORIGINAL BERT STYLE FOR C
             tokens_b.extend(current_chunk[j])
         truncate_seq_pair(tokens_a, tokens_b, max_num_tokens, rng)
 
-        assert len(tokens_a) >= 1
-        assert len(tokens_b) >= 1
+        assert tokens_a
+        assert tokens_b
 
-        # 把tokens_a & tokens_b加入到按照bert的风格，即以[CLS]tokens_a[SEP]tokens_b[SEP]的形式，结合到一起，作为最终的tokens; 也带上segment_ids，前面部分segment_ids的值是0，后面部分的值是1.
-        tokens = []
-        segment_ids = []
-        tokens.append("[CLS]")
-        segment_ids.append(0)
+        tokens = ["[CLS]"]
+        segment_ids = [0]
         for token in tokens_a:
           tokens.append(token)
           segment_ids.append(0)
@@ -501,7 +487,7 @@ def create_masked_lm_predictions(tokens, masked_lm_prob,
 
   cand_indexes = []
   for (i, token) in enumerate(tokens):
-    if token == "[CLS]" or token == "[SEP]":
+    if token in ["[CLS]", "[SEP]"]:
       continue
     # Whole Word Masking means that if we mask all of the wordpieces
     # corresponding to an original word. When a word has been split into
@@ -512,8 +498,7 @@ def create_masked_lm_predictions(tokens, masked_lm_prob,
     # Note that Whole Word Masking does *not* change the training code
     # at all -- we still predict each WordPiece independently, softmaxed
     # over the entire vocabulary.
-    if (FLAGS.do_whole_word_mask and len(cand_indexes) >= 1 and
-            token.startswith("##")):
+    if FLAGS.do_whole_word_mask and cand_indexes and token.startswith("##"):
       cand_indexes[-1].append(i)
     else:
       cand_indexes.append([i])
@@ -537,11 +522,7 @@ def create_masked_lm_predictions(tokens, masked_lm_prob,
     # predictions, then just skip this candidate.
     if len(masked_lms) + len(index_set) > num_to_predict:
       continue
-    is_any_index_covered = False
-    for index in index_set:
-      if index in covered_indexes:
-        is_any_index_covered = True
-        break
+    is_any_index_covered = any(index in covered_indexes for index in index_set)
     if is_any_index_covered:
       continue
     for index in index_set:
@@ -551,16 +532,13 @@ def create_masked_lm_predictions(tokens, masked_lm_prob,
       # 80% of the time, replace with [MASK]
       if rng.random() < 0.8:
         masked_token = "[MASK]"
-      else:
-        # 10% of the time, keep original
-        if rng.random() < 0.5:
-          if FLAGS.non_chinese == False: # if non chinese is False, that means it is chinese, then try to remove "##" which is added previously
-            masked_token = tokens[index][2:] if len(re.findall('##[\u4E00-\u9FA5]', tokens[index])) > 0 else tokens[index]  # 去掉"##"
-          else:
-            masked_token = tokens[index]
-        # 10% of the time, replace with random word
+      elif rng.random() < 0.5:
+        if FLAGS.non_chinese == False: # if non chinese is False, that means it is chinese, then try to remove "##" which is added previously
+          masked_token = tokens[index][2:] if len(re.findall('##[\u4E00-\u9FA5]', tokens[index])) > 0 else tokens[index]  # 去掉"##"
         else:
-          masked_token = vocab_words[rng.randint(0, len(vocab_words) - 1)]
+          masked_token = tokens[index]
+      else:
+        masked_token = vocab_words[rng.randint(0, len(vocab_words) - 1)]
 
       output_tokens[index] = masked_token
 
@@ -584,7 +562,7 @@ def create_masked_lm_predictions_original(tokens, masked_lm_prob,
 
   cand_indexes = []
   for (i, token) in enumerate(tokens):
-    if token == "[CLS]" or token == "[SEP]":
+    if token in ["[CLS]", "[SEP]"]:
       continue
     # Whole Word Masking means that if we mask all of the wordpieces
     # corresponding to an original word. When a word has been split into
@@ -595,8 +573,7 @@ def create_masked_lm_predictions_original(tokens, masked_lm_prob,
     # Note that Whole Word Masking does *not* change the training code
     # at all -- we still predict each WordPiece independently, softmaxed
     # over the entire vocabulary.
-    if (FLAGS.do_whole_word_mask and len(cand_indexes) >= 1 and
-        token.startswith("##")):
+    if FLAGS.do_whole_word_mask and cand_indexes and token.startswith("##"):
       cand_indexes[-1].append(i)
     else:
       cand_indexes.append([i])
@@ -617,11 +594,7 @@ def create_masked_lm_predictions_original(tokens, masked_lm_prob,
     # predictions, then just skip this candidate.
     if len(masked_lms) + len(index_set) > num_to_predict:
       continue
-    is_any_index_covered = False
-    for index in index_set:
-      if index in covered_indexes:
-        is_any_index_covered = True
-        break
+    is_any_index_covered = any(index in covered_indexes for index in index_set)
     if is_any_index_covered:
       continue
     for index in index_set:
@@ -631,13 +604,10 @@ def create_masked_lm_predictions_original(tokens, masked_lm_prob,
       # 80% of the time, replace with [MASK]
       if rng.random() < 0.8:
         masked_token = "[MASK]"
+      elif rng.random() < 0.5:
+        masked_token = tokens[index]
       else:
-        # 10% of the time, keep original
-        if rng.random() < 0.5:
-          masked_token = tokens[index]
-        # 10% of the time, replace with random word
-        else:
-          masked_token = vocab_words[rng.randint(0, len(vocab_words) - 1)]
+        masked_token = vocab_words[rng.randint(0, len(vocab_words) - 1)]
 
       output_tokens[index] = masked_token
 

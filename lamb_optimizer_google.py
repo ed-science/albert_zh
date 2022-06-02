@@ -60,10 +60,8 @@ class LAMBOptimizer(tf.train.Optimizer):
     # exclude_from_layer_adaptation is set to exclude_from_weight_decay if the
     # arg is None.
     # TODO(jingli): validate if exclude_from_layer_adaptation is necessary.
-    if exclude_from_layer_adaptation:
-      self.exclude_from_layer_adaptation = exclude_from_layer_adaptation
-    else:
-      self.exclude_from_layer_adaptation = exclude_from_weight_decay
+    self.exclude_from_layer_adaptation = (exclude_from_layer_adaptation
+                                          or exclude_from_weight_decay)
 
   def apply_gradients(self, grads_and_vars, global_step=None, name=None):
     """See base class."""
@@ -75,17 +73,19 @@ class LAMBOptimizer(tf.train.Optimizer):
       param_name = self._get_variable_name(param.name)
 
       m = tf.get_variable(
-          name=six.ensure_str(param_name) + "/adam_m",
+          name=f"{six.ensure_str(param_name)}/adam_m",
           shape=param.shape.as_list(),
           dtype=tf.float32,
           trainable=False,
-          initializer=tf.zeros_initializer())
+          initializer=tf.zeros_initializer(),
+      )
       v = tf.get_variable(
-          name=six.ensure_str(param_name) + "/adam_v",
+          name=f"{six.ensure_str(param_name)}/adam_v",
           shape=param.shape.as_list(),
           dtype=tf.float32,
           trainable=False,
-          initializer=tf.zeros_initializer())
+          initializer=tf.zeros_initializer(),
+      )
 
       # Standard Adam update.
       next_m = (
@@ -145,5 +145,5 @@ class LAMBOptimizer(tf.train.Optimizer):
     """Get the variable name from the tensor name."""
     m = re.match("^(.*):\\d+$", six.ensure_str(param_name))
     if m is not None:
-      param_name = m.group(1)
+      param_name = m[1]
     return param_name
